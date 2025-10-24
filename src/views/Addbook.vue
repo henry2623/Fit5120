@@ -1,53 +1,55 @@
 <template>
-  <div>
-    <h1>Add Book</h1>
-    <form @submit.prevent="addBook">
-      <div>
-        <label for="isbn">ISBN:</label>
-        <input type="text" v-model="isbn" id="isbn" required />
-      </div>
-      <div>
-        <label for="name">Name:</label>
-        <input type="text" v-model="name" id="name" required />
-      </div>
-      <button type="submit">Add Book</button>
-    </form>
+  <div class="container mt-4">
+    <h1>User Profile</h1>
 
+    <div v-if="user">
+      <p><strong>Email:</strong> {{ user.email }}</p>
+      <p><strong>Name:</strong> {{ user.displayName || "N/A" }}</p>
+      <p><strong>Role:</strong> {{ role }}</p>
+      <button class="btn btn-danger" @click="logout">Logout</button>
+    </div>
 
-    <BookList />
+    <div v-else>
+      <p>You are not logged in.</p>
+    </div>
   </div>
 </template>
 
-<script>
-import { ref } from "vue";
-import { db } from "../firebase/init.js";
-import { collection, addDoc } from "firebase/firestore";
-import BookList from "../components/BookList.vue";
+<script setup>
+import { ref, onMounted } from 'vue'
+import { getAuth, onAuthStateChanged, signOut, getIdTokenResult } from 'firebase/auth'
+import { useRouter } from 'vue-router'
 
-export default {
-  name: "AddBook",
-  components: { BookList },
-  setup() {
-    const isbn = ref("");
-    const name = ref("");
+const user = ref(null)
+const role = ref('Guest')
+const router = useRouter()
+const auth = getAuth()
 
-    const addBook = async () => {
-      try {
-        const n = Number(isbn.value);
-        if (isNaN(n)) {
-          alert("ISBN must be a valid number");
-          return;
-        }
-        await addDoc(collection(db, "books"), { isbn: n, name: name.value });
-        isbn.value = "";
-        name.value = "";
-        alert("Book added!");
-      } catch (e) {
-        console.error("Error adding book: ", e);
-      }
-    };
+onMounted(() => {
+  onAuthStateChanged(auth, async (firebaseUser) => {
+    if (firebaseUser) {
+      user.value = firebaseUser
 
-    return { isbn, name, addBook };
-  },
-};
+      const tokenResult = await getIdTokenResult(firebaseUser)
+      role.value = tokenResult.claims.role || 'User'
+
+      console.log('Current User:', firebaseUser)
+      console.log('Role from custom claims:', role.value)
+    } else {
+      user.value = null
+      role.value = 'Guest'
+    }
+  })
+})
+
+const logout = async () => {
+  try {
+    await signOut(auth)
+    user.value = null
+    role.value = 'Guest'
+    router.push('/FireLogin')
+  } catch (err) {
+    console.error('Logout error:', err)
+  }
+}
 </script>
